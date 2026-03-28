@@ -104,4 +104,6 @@ with st.sidebar:
 st.write("### 📋 Current Duty Chart")
 st.data_editor(st.session_state.roster_data, use_container_width=True)
 
-if
+if st.button("Reset All to Pending"):
+    st.session_state.roster_data = pd.DataFrame("Pending", index=st.session_state.nurse_list, columns=days)
+    st.rerun()
