@@ -10,7 +10,6 @@ st.title("🏥 GMC Akola Nurses Duty Roster")
 days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 working_shifts = ["Morning (M)", "Evening (E)", "Night (N)"]
 
-# Initialize session states
 if 'nurse_list' not in st.session_state:
     st.session_state.nurse_list = ["Nurse A", "Nurse B", "Nurse C", "Nurse D", "Nurse E"]
 
@@ -53,46 +52,56 @@ with st.sidebar:
 
     st.divider()
 
-    # --- SIDEBAR: SMART MAGIC BUTTON ---
+    # --- SIDEBAR: SMART MAGIC BUTTON WITH REST RULES ---
     st.header("🪄 Roster Tools")
     if st.button("✨ Generate Full Roster"):
         error_days = []
         
-        for day in days:
+        for i, day in enumerate(days):
             # 1. Identify what is already filled by demands
             current_day_assignments = st.session_state.roster_data[day].tolist()
             filled_working_shifts = [s for s in current_day_assignments if s in working_shifts]
             
-            # 2. Identify which working shifts are still needed (M, E, or N)
+            # 2. Identify which working shifts are still needed
             needed_shifts = [s for s in working_shifts if s not in filled_working_shifts]
             
-            # 3. Identify nurses available for assignment (those still "Pending")
-            available_nurses = [n for n in st.session_state.nurse_list if st.session_state.roster_data.at[n, day] == "Pending"]
+            # 3. Available Nurses (exclude those who had Night (N) yesterday)
+            available_nurses = []
+            for nurse in st.session_state.nurse_list:
+                # Rule: If yesterday was Night, today MUST be Pending/Off (Post-Night Off)
+                if i > 0:
+                    yesterday = days[i-1]
+                    if st.session_state.roster_data.at[nurse, yesterday] == "Night (N)":
+                        # If they were assigned Night yesterday, ensure they are Off today
+                        if st.session_state.roster_data.at[nurse, day] == "Pending":
+                            st.session_state.roster_data.at[nurse, day] = "Off"
+                        continue # Skip to next nurse, they can't work today
+                
+                # Only add to available if they are currently "Pending"
+                if st.session_state.roster_data.at[nurse, day] == "Pending":
+                    available_nurses.append(nurse)
             
             # 4. Try to fill needed shifts
             if len(available_nurses) < len(needed_shifts):
                 error_days.append(day)
             else:
                 random.shuffle(available_nurses)
-                # Assign needed shifts first
                 for shift in needed_shifts:
                     nurse = available_nurses.pop()
                     st.session_state.roster_data.at[nurse, day] = shift
                 
-                # Assign "Off" to anyone else remaining as "Pending"
+                # Remaining pending nurses get "Off"
                 for nurse in available_nurses:
                     st.session_state.roster_data.at[nurse, day] = "Off"
         
         if error_days:
-            st.error(f"⚠️ Shortage on: {', '.join(error_days)}. Too many nurses requested 'Off'. Please adjust demands for these days!")
+            st.error(f"⚠️ Coverage Error on: {', '.join(error_days)}. Remember: Nurses who work Night shifts MUST get the next day off. Add more staff or change demands!")
         else:
             st.balloons()
-            st.success("Roster filled! Every shift has at least one nurse.")
+            st.success("Roster generated with Post-Night Off rules applied!")
 
 # --- MAIN DISPLAY ---
 st.write("### 📋 Current Duty Chart")
 st.data_editor(st.session_state.roster_data, use_container_width=True)
 
-if st.button("Reset All to Pending"):
-    st.session_state.roster_data = pd.DataFrame("Pending", index=st.session_state.nurse_list, columns=days)
-    st.rerun()
+if
